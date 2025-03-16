@@ -20,7 +20,7 @@ if popular_movies:
     for movie in popular_movies['results'][:5]:  # Afficher les 5 premiers films populaires
         print(f"Title: {movie['title']}, Release Date: {movie['release_date']}")
 
-pip install duckdb
+# pip install duckdb
 
 import duckdb
 import requests
@@ -66,75 +66,46 @@ def get_popular_movies():
         print(f"Erreur: {response.status_code}")
         return []
 
-def insert_movies_to_db(movies, batch_size=100):
+# Insérer les films récupérés dans la base de données
+def insert_movies_to_db(movies):
     # Connexion à la base de données
     conn = duckdb.connect('movies.db')
     
-    # Initialiser une liste pour stocker les films à insérer
-    batch = []
-    
     for movie in movies:
-        # Gérer les valeurs manquantes pour genres, description, etc.
-        genres = ', '.join([genre['name'] for genre in movie.get('genres', [])]) if 'genres' in movie else ''
-        description = movie.get('overview', '')
-        release_date = movie.get('release_date', '')
-        vote_average = movie.get('vote_average', 0)
-        vote_count = movie.get('vote_count', 0)
-        
-        # Vérifier si le film existe déjà dans la base de données avant de l'ajouter
+        # Vérifier si le film existe déjà dans la base de données
         movie_id = movie['id']
         result = conn.execute("SELECT COUNT(*) FROM films WHERE id = ?", (movie_id,)).fetchone()
         
-        if result[0] == 0:  # Si le film n'existe pas, l'ajouter au batch
-            batch.append((movie['id'], movie['title'], genres, description, release_date, vote_average, vote_count))
-        
-        # Si le batch a atteint la taille limite, insérer en une seule requête
-        if len(batch) >= batch_size:
-            conn.executemany('''
+        if result[0] == 0:  # Si le film n'existe pas, l'insérer
+            # Gérer le cas où la clé 'genres' ou d'autres clés peuvent être manquantes
+            genres = ', '.join([genre['name'] for genre in movie.get('genres', [])]) if 'genres' in movie else ''
+            description = movie.get('overview', '')
+            release_date = movie.get('release_date', '')
+            vote_average = movie.get('vote_average', 0)
+            vote_count = movie.get('vote_count', 0)
+
+            conn.execute(''' 
                 INSERT INTO films (id, title, genres, description, release_date, vote_average, vote_count) 
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            ''', batch)
-            # Réinitialiser le batch après l'insertion
-            batch = []
-    
-    # Insérer les films restants qui ne remplissent pas un batch complet
-    if batch:
-        conn.executemany('''
-            INSERT INTO films (id, title, genres, description, release_date, vote_average, vote_count) 
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        ''', batch)
+                VALUES (?, ?, ?, ?, ?, ?, ?) 
+            ''', (movie['id'], movie['title'], genres, description, release_date, vote_average, vote_count))
+        else:
+            print(f"Le film avec l'id {movie_id} existe déjà dans la base.")
+
 # Récupérer les films populaires et les insérer dans la base de données
 movies = get_popular_movies()
 insert_movies_to_db(movies)
 
 # Charger les évaluations des utilisateurs depuis le fichier CSV "ratings.csv"
 ratings_df = pd.read_csv('ratings.csv')
-def insert_ratings_to_db(batch_size=100):
-    # Connexion à la base de données
-    conn = duckdb.connect('movies.db')
-    
-    # Initialiser une liste pour stocker les évaluations à insérer
-    batch = []
-    
+
+# Insérer les évaluations dans la base de données
+def insert_ratings_to_db():
     for _, row in ratings_df.iterrows():
-        # Ajouter les données de l'évaluation à la liste batch
-        batch.append((row['userId'], row['movieId'], row['rating'], row['timestamp']))
-        
-        # Si le batch a atteint la taille limite, insérer en une seule requête
-        if len(batch) >= batch_size:
-            conn.executemany('''
-                INSERT INTO ratings (user_id, movie_id, rating, timestamp)
-                VALUES (?, ?, ?, ?)
-            ''', batch)
-            # Réinitialiser le batch après l'insertion
-            batch = []
-    
-    # Insérer les évaluations restantes qui ne remplissent pas un batch complet
-    if batch:
-        conn.executemany('''
+        conn.execute('''
             INSERT INTO ratings (user_id, movie_id, rating, timestamp)
             VALUES (?, ?, ?, ?)
-        ''', batch)
+        ''', (row['userId'], row['movieId'], row['rating'], row['timestamp']))
+
 insert_ratings_to_db()
 
 # Vérifier l'insertion
@@ -149,4 +120,3 @@ conn.execute("EXPORT DATABASE 'movies.db' TO 'movies_backup.sql';")
 
 # Fermer la connexion
 conn.close()
-pip install fastapi uvicorn duckdb pandas scikit-surprise
