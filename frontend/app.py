@@ -75,3 +75,22 @@ plot_movies_per_year()
 # Afficher les recommandations
 st.header("Recommandations Personnalisées")
 show_recommendations()
+
+___________________________________________________________________________________________________________________________________________________
+
+"""
+Explication du Code :
+Streamlit (app.py) :
+
+Visualisation des données : Vous utilisez seaborn et matplotlib pour afficher des graphiques sur la distribution des notes moyennes des films et l'évolution du nombre de films par année.
+Recommandations personnalisées : Vous utilisez une interface Streamlit qui permet à l'utilisateur de saisir un user_id et affiche les films recommandés par l'API du back-end.
+Dockerfile :
+
+Ce fichier définit un conteneur Docker pour exécuter l'application Streamlit sur le port 8501.
+requirements.txt :
+
+Liste les bibliothèques nécessaires pour l'exécution de votre application Streamlit et pour la manipulation de données (pandas, matplotlib, seaborn, etc.).
+Docker Compose :
+
+Si vous utilisez Docker Compose, ce fichier orchestrera les services pour votre front-end, back-end, et la base de données DuckDB. Il crée un environnement isolé avec les conteneurs correspondants.
+"""
