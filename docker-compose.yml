@@ -8,6 +8,8 @@ services:
       - "8000:8000"
     networks:
       - flix_network
+    depends_on:
+      - database
 
   frontend:
     build:
@@ -16,13 +18,17 @@ services:
       - "8501:8501"
     networks:
       - flix_network
+    depends_on:
+      - backend
 
   database:
-    image: duckdb/duckdb:latest  # Utilisation d'une image Docker existante
+    image: duckdb/duckdb:latest
     volumes:
-      - ./data:/data  # Montage d'un volume pour stocker les données DuckDB
+      - ./data:/data
     networks:
       - flix_network
+    environment:
+      - DUCKDB_DB=/data/movies.db
 
 networks:
   flix_network:
