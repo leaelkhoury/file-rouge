@@ -1,3 +1,7 @@
+""" GET https://api.themoviedb.org/3/movie/550?api_key=f388326c5cac9ad23fde27ca61ce2a3c&language=fr-FR 
+on utilise: GET POST PUT PATCH DELETE 
+"""
+
 from fastapi import FastAPI
 from surprise import Dataset, Reader, SVD
 from surprise.model_selection import train_test_split
