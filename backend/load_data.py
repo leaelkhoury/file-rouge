@@ -20,6 +20,16 @@ curl --request GET \
      --header 'Authorization: Bearer f388326c5cac9ad23fde27ca61ce2a3c' \
      --header 'accept: application/json'
 
+les films populaires:
+
+import requests
+url = "https://api.themoviedb.org/3/movie/popular?language=en-US&page=1"
+headers = {
+    "accept": "application/json",
+    "Authorization": "Bearer f388326c5cac9ad23fde27ca61ce2a3c"
+}
+response = requests.get(url, headers=headers)
+print(response.text)
 """
 
 import requests
