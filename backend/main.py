@@ -1,6 +1,14 @@
 """ GET https://api.themoviedb.org/3/movie/550?api_key=f388326c5cac9ad23fde27ca61ce2a3c&language=fr-FR 
 réponse réussie affiche: 200, fichier JSON
 on utilise: GET POST PUT PATCH DELETE 
+
+python -m pip install requests
+import requests
+url = "https://api.themoviedb.org/3/movie/movie_id?language=fr-FR"
+headers = {"accept": "application/json"}
+response = requests.get(url, headers=headers)
+print(response.text)
+
 """
 
 from fastapi import FastAPI
