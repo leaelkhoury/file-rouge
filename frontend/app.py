@@ -1,3 +1,5 @@
+"""IL FAUT FAIRE JAVA SCRIPT PAS PYTHON """
+
 import streamlit as st
 import requests
 import pandas as pd
