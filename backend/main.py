@@ -1,4 +1,4 @@
-
+""" pydantic : typing (typer les requetes ) """
 
 from fastapi import FastAPI
 from surprise import Dataset, Reader, SVD
