@@ -6,13 +6,16 @@ python:
 python -m pip install requests
 import requests
 url = "https://api.themoviedb.org/3/movie/movie_id?language=fr-FR"
-headers = {"accept": "application/json"}
+headers = {
+    "accept": "application/json",
+    "Authorization": "Bearer f388326c5cac9ad23fde27ca61ce2a3c"
+}
 response = requests.get(url, headers=headers)
 print(response.text)
 
 http:
 curl --request GET \
-     --url 'https://api.themoviedb.org/3/movie/movie_id?language=en-US' \
+     --url 'https://api.themoviedb.org/3/movie/movie_id?language=fr-FR' \
      --header 'Authorization: Bearer f388326c5cac9ad23fde27ca61ce2a3c' \
      --header 'accept: application/json'
 
