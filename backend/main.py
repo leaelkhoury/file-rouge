@@ -1,4 +1,6 @@
-""" pydantic : typing (typer les requetes ) """
+""" from pydantic import BaseModel: typing (typer les requetes ) 
+import joblib
+"""
 
 from fastapi import FastAPI
 from surprise import Dataset, Reader, SVD
