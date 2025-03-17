@@ -2,6 +2,7 @@
 réponse réussie affiche: 200, fichier JSON
 on utilise: GET POST PUT PATCH DELETE 
 
+SUR VSCODE:
 python:
 python -m pip install requests
 import requests
