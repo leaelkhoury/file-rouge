@@ -1,5 +1,17 @@
 """ from pydantic import BaseModel: typing (typer les requetes ) 
 import joblib
+
+class CLASS1(BaseModel):
+message: str/int/float (c'est un exple)
+
+et on peut avoir:
+class  CLASS2(BaseModel):
+rec= List(CLASS1)
+
+utiliser from api import apiRouter...
+exps:
+@router.post("/recommendations/{user_id}")
+@app.get("/recommendations/{user_id}")
 """
 
 from fastapi import FastAPI
