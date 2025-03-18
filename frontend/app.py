@@ -78,6 +78,7 @@ plot_movies_per_year()
 st.header("Recommandations Personnalisées")
 show_recommendations()
 
+# on peut faire un SORT des recommendations aussi
 ___________________________________________________________________________________________________________________________________________________
 
 """
