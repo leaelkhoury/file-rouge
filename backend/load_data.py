@@ -30,6 +30,8 @@ headers = {
 }
 response = requests.get(url, headers=headers)
 print(response.text)
+
+JE PEUX TRONQUER 
 """
 
 import requests
@@ -154,3 +156,5 @@ conn.execute("EXPORT DATABASE 'movies.db' TO 'movies_backup.sql';")
 
 # Fermer la connexion
 conn.close()
+
+pip install fastapi uvicorn duckdb pandas scikit-surprise
