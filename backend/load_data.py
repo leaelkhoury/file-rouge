@@ -35,6 +35,8 @@ JE PEUX TRONQUER 5 000/ 45 000 films
 
 from sqlalchemy import engine
 logger.info pour voir si ça existe 
+
+pour éxécuter sur vscode: python3 dossier/nom_file.py
 """
 
 import requests
