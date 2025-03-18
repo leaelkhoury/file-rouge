@@ -32,6 +32,9 @@ response = requests.get(url, headers=headers)
 print(response.text)
 
 JE PEUX TRONQUER 5 000/ 45 000 films
+
+from sqlalchemy import engine
+logger.info pour voir si ça existe 
 """
 
 import requests
