@@ -1,76 +1,16 @@
-""" GET https://api.themoviedb.org/3/movie/550?api_key=f388326c5cac9ad23fde27ca61ce2a3c&language=fr-FR 
-réponse réussie affiche: 200, fichier JSON
-on utilise: GET POST PUT PATCH DELETE 
+"import requests
+import duckdb
+import pandas as pd
+import time
 
-SUR VSCODE:
-python:
-python -m pip install requests
-import requests
-url = "https://api.themoviedb.org/3/movie/movie_id?language=fr-FR"
-headers = {
-    "accept": "application/json",
-    "Authorization": "Bearer f388326c5cac9ad23fde27ca61ce2a3c"
-}
-response = requests.get(url, headers=headers)
-print(response.text)
-
-http:
-curl --request GET \
-     --url 'https://api.themoviedb.org/3/movie/movie_id?language=fr-FR' \
-     --header 'Authorization: Bearer f388326c5cac9ad23fde27ca61ce2a3c' \
-     --header 'accept: application/json'
-
-les films populaires:
-
-import requests
-url = "https://api.themoviedb.org/3/movie/popular?language=en-US&page=1"
-headers = {
-    "accept": "application/json",
-    "Authorization": "Bearer f388326c5cac9ad23fde27ca61ce2a3c"
-}
-response = requests.get(url, headers=headers)
-print(response.text)
-
-JE PEUX TRONQUER 5 000/ 45 000 films
-
-from sqlalchemy import engine
-logger.info pour voir si ça existe 
-
-pour éxécuter sur vscode: python3 dossier/nom_file.py
-"""
-
-import requests
-
-# Remplace par ta clé API TMDB
+# Configuration de l'API
 API_KEY = "f388326c5cac9ad23fde27ca61ce2a3c"
 BASE_URL = "https://api.themoviedb.org/3"
 
-# Fonction pour récupérer les films populaires
-def get_popular_movies():
-    url = f"{BASE_URL}/movie/popular?api_key={API_KEY}"
-    response = requests.get(url)
-    if response.status_code == 200:
-        return response.json()  # Retourne les films populaires en format JSON
-    else:
-        print(f"Erreur: {response.status_code}")
-        return None
-
-# Appel de la fonction et affichage des résultats
-popular_movies = get_popular_movies()
-if popular_movies:
-    for movie in popular_movies['results'][:5]:  # Afficher les 5 premiers films populaires
-        print(f"Title: {movie['title']}, Release Date: {movie['release_date']}")
-
-# pip install duckdb
-
-import duckdb
-import requests
-import pandas as pd
-
-# Connexion à DuckDB (création d'un fichier si inexistant)
+# Connexion à DuckDB
 conn = duckdb.connect('movies.db')
 
-# Créer une table films si elle n'existe pas déjà
+# Créer les tables si elles n'existent pas
 conn.execute(''' 
     CREATE TABLE IF NOT EXISTS films ( 
         id INTEGER PRIMARY KEY, 
@@ -83,7 +23,6 @@ conn.execute('''
     ); 
 ''')
 
-# Créer une table ratings si elle n'existe pas déjà
 conn.execute(''' 
     CREATE TABLE IF NOT EXISTS ratings ( 
         user_id INTEGER, 
@@ -93,73 +32,230 @@ conn.execute('''
     ); 
 ''')
 
-# Remplacer par ta clé API TMDB
-API_KEY = "f388326c5cac9ad23fde27ca61ce2a3c"
-BASE_URL = "https://api.themoviedb.org/3"
+def get_popular_movies(limit=500):
+    movies = []
+    page = 1
 
-# Fonction pour récupérer les films populaires
-def get_popular_movies():
-    url = f"{BASE_URL}/movie/popular?api_key={API_KEY}"
-    response = requests.get(url)
-    if response.status_code == 200:
-        return response.json()['results']  # Retourne les films populaires en format JSON
-    else:
-        print(f"Erreur: {response.status_code}")
-        return []
+    while len(movies) < limit:
+        url = f"{BASE_URL}/movie/popular?api_key={API_KEY}&page={page}"
+        response = requests.get(url)
+        
+        if response.status_code == 200:
+            results = response.json().get('results', [])
+            movies.extend(results)
+        else:
+            print(f"Erreur lors de la récupération des films (Page {page}): {response.status_code}")
+            break
+        
+        page += 1
+        if page > 25:  # Sécurité pour ne pas dépasser 25 pages
+            break
 
-# Insérer les films récupérés dans la base de données
-def insert_movies_to_db(movies):
+    return movies[:limit]  # On prend seulement les 500 premiers films
+
+
+
+def insert_movies_to_db(movies, batch_size=100):
     # Connexion à la base de données
     conn = duckdb.connect('movies.db')
     
+    # Initialiser une liste pour stocker les films à insérer
+    batch = []
+    
     for movie in movies:
-        # Vérifier si le film existe déjà dans la base de données
+        # Gérer les valeurs manquantes pour genres, description, etc.
+        genres = ', '.join([genre['name'] for genre in movie.get('genres', [])]) if 'genres' in movie else ''
+        description = movie.get('overview', '')
+        release_date = movie.get('release_date', '')
+        vote_average = movie.get('vote_average', 0)
+        vote_count = movie.get('vote_count', 0)
+        
+        # Vérifier si le film existe déjà dans la base de données avant de l'ajouter
         movie_id = movie['id']
         result = conn.execute("SELECT COUNT(*) FROM films WHERE id = ?", (movie_id,)).fetchone()
         
-        if result[0] == 0:  # Si le film n'existe pas, l'insérer
-            # Gérer le cas où la clé 'genres' ou d'autres clés peuvent être manquantes
-            genres = ', '.join([genre['name'] for genre in movie.get('genres', [])]) if 'genres' in movie else ''
-            description = movie.get('overview', '')
-            release_date = movie.get('release_date', '')
-            vote_average = movie.get('vote_average', 0)
-            vote_count = movie.get('vote_count', 0)
+        if result[0] == 0:  # Si le film n'existe pas, l'ajouter au batch
+            batch.append((movie['id'], movie['title'], genres, description, release_date, vote_average, vote_count))
+        
+        # Si le batch a atteint la taille limite, insérer en une seule requête
+        if len(batch) >= batch_size:
+            conn.executemany('''
+                INSERT INTO films (id, title, genres, description, release_date, vote_average, vote_count)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', batch)
+            # Réinitialiser le batch après l'insertion
+            batch = []
+    
+    # Insérer les films restants qui ne remplissent pas un batch complet
+    if batch:
+        conn.executemany('''
+            INSERT INTO films (id, title, genres, description, release_date, vote_average, vote_count)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', batch)
 
-            conn.execute(''' 
-                INSERT INTO films (id, title, genres, description, release_date, vote_average, vote_count) 
-                VALUES (?, ?, ?, ?, ?, ?, ?) 
-            ''', (movie['id'], movie['title'], genres, description, release_date, vote_average, vote_count))
-        else:
-            print(f"Le film avec l'id {movie_id} existe déjà dans la base.")
+# Charger les évaluations des utilisateurs depuis le fichier CSV "ratings.csv"
+ratings_df = pd.read_csv('ratings.csv').head(500)
 
-# Récupérer les films populaires et les insérer dans la base de données
+# Gérer les valeurs NaN dans les évaluations
+ratings_df = ratings_df.dropna(subset=['userId', 'movieId', 'rating', 'timestamp'])  # Supprimer les lignes avec NaN
+# Si vous préférez remplacer les NaN, vous pouvez aussi faire :
+# ratings_df.fillna({'rating': 0, 'timestamp': 0}, inplace=True)  # Remplacer les NaN par 0 pour certaines colonnes
+
+def insert_ratings_to_db(batch_size=100):
+    batch = []
+    
+    for _, row in ratings_df.iterrows():
+        batch.append((row['userId'], row['movieId'], row['rating'], row['timestamp']))
+        
+        if len(batch) >= batch_size:
+            conn.executemany('''
+                INSERT INTO ratings (user_id, movie_id, rating, timestamp)
+                VALUES (?, ?, ?, ?)
+            ''', batch)
+            batch = []
+
+    if batch:
+        conn.executemany('''
+            INSERT INTO ratings (user_id, movie_id, rating, timestamp)
+            VALUES (?, ?, ?, ?)
+        ''', batch)
+
+
 movies = get_popular_movies()
 insert_movies_to_db(movies)
 
-# Charger les évaluations des utilisateurs depuis le fichier CSV "ratings.csv"
-ratings_df = pd.read_csv('ratings.csv')
+def export_to_sql(conn, filename):
+    with open(filename, 'w', encoding='utf-8') as f:
+        # Écrire l'en-tête
+        f.write("-- SQL dump generated from DuckDB\n")
+        f.write("BEGIN TRANSACTION;\n\n")
+        
+        # Schema des tables
+        f.write("-- Table structure for films\n")
+        f.write("DROP TABLE IF EXISTS films;\n")
+        f.write('''CREATE TABLE films (
+            id INTEGER PRIMARY KEY,
+            title TEXT,
+            release_date TEXT,
+            vote_average REAL,
+            description TEXT,
+            genres TEXT,
+            vote_count INTEGER
+        );\n\n''')
+        
+        f.write("-- Table structure for ratings\n")
+        f.write("DROP TABLE IF EXISTS ratings;\n")
+        f.write('''CREATE TABLE ratings (
+            user_id INTEGER,
+            movie_id INTEGER,
+            rating REAL,
+            timestamp INTEGER
+        );\n\n''')
+        
+        # Données des films
+        f.write("-- Data for films\n")
+        for row in conn.execute("SELECT * FROM films").fetchall():
+            values = []
+            for val in row:
+                if val is None:
+                    values.append("NULL")
+                elif isinstance(val, str):
+                    # Échapper les apostrophes et guillemets
+                    escaped = val.replace("'", "''")
+                    values.append(f"'{escaped}'")
+                elif isinstance(val, (int, float)):
+                    values.append(str(val))
+                else:
+                    values.append(f"'{str(val)}'")
+            
+            f.write(f"INSERT INTO films VALUES ({','.join(values)});\n")
+        
+        # Données des ratings
+        f.write("\n-- Data for ratings\n")
+        for row in conn.execute("SELECT * FROM ratings").fetchall():
+            values = []
+            for val in row:
+                if val is None:
+                    values.append("NULL")
+                elif isinstance(val, str):
+                    escaped = val.replace("'", "''")
+                    values.append(f"'{escaped}'")
+                else:
+                    values.append(str(val))
+            
+            f.write(f"INSERT INTO ratings VALUES ({','.join(values)});\n")
+        
+        f.write("\nCOMMIT;\n")
 
-# Insérer les évaluations dans la base de données
-def insert_ratings_to_db():
-    for _, row in ratings_df.iterrows():
-        conn.execute('''
-            INSERT INTO ratings (user_id, movie_id, rating, timestamp)
-            VALUES (?, ?, ?, ?)
-        ''', (row['userId'], row['movieId'], row['rating'], row['timestamp']))
+# Utilisation
+export_to_sql(conn, 'movies_backup.sql')
+conn.close()
 
-insert_ratings_to_db()
 
-# Vérifier l'insertion
-result = conn.execute('SELECT * FROM films LIMIT 5').fetchall()
-print("Films insérés:", result)
+# Connexion à la base de données
+conn = duckdb.connect('movies.db')
 
-ratings_result = conn.execute('SELECT * FROM ratings LIMIT 5').fetchall()
-print("Évaluations insérées:", ratings_result)
+# 1. Afficher le nombre total de films
+total_films = conn.execute("SELECT COUNT(*) FROM films").fetchone()[0]
+print(f"\n📊 Nombre total de films dans la base : {total_films}")
 
-# Exporter la base de données sous forme de fichier SQL
-conn.execute("EXPORT DATABASE 'movies.db' TO 'movies_backup.sql';")
+# 2. Afficher tous les champs des 5 premiers films
+print("\n🎬 Exemple de films (tous les champs) :")
+films_df = conn.execute("SELECT * FROM films LIMIT 5").fetchdf()
+pd.set_option('display.max_columns', None)  # Afficher toutes les colonnes
+pd.set_option('display.width', 1000)       # Largeur d'affichage
+print(films_df)
+
+# 3. Afficher les évaluations avec tous les champs
+print("\n⭐ Exemple d'évaluations (tous les champs) :")
+ratings_df = conn.execute("""
+    SELECT r.*, f.title as film_title 
+    FROM ratings r
+    JOIN films f ON r.movie_id = f.id
+    LIMIT 10
+""").fetchdf()
+print(ratings_df)
+
+# 4. Statistiques détaillées
+print("\n📈 Statistiques complètes :")
+
+# Note moyenne globale
+avg_rating = conn.execute("SELECT AVG(vote_average) FROM films").fetchone()[0]
+print(f"- Note moyenne globale des films: {avg_rating:.2f}/10")
+
+# Nombre total d'évaluations
+total_ratings = conn.execute("SELECT COUNT(*) FROM ratings").fetchone()[0]
+print(f"- Nombre total d'évaluations: {total_ratings}")
+
+# Nombre moyen d'évaluations par film
+avg_ratings_per_film = conn.execute("""
+    SELECT AVG(ratings_count) 
+    FROM (
+        SELECT movie_id, COUNT(*) as ratings_count 
+        FROM ratings 
+        GROUP BY movie_id
+    )
+""").fetchone()[0]
+print(f"- Nombre moyen d'évaluations par film: {avg_ratings_per_film:.1f}")
+
+# Film le mieux noté
+best_movie = conn.execute("""
+    SELECT title, vote_average 
+    FROM films 
+    ORDER BY vote_average DESC 
+    LIMIT 1
+""").fetchone()
+print(f"- Film le mieux noté: '{best_movie[0]}' avec {best_movie[1]}/10")
+
+# Utilisateur le plus actif
+active_user = conn.execute("""
+    SELECT user_id, COUNT(*) as rating_count
+    FROM ratings
+    GROUP BY user_id
+    ORDER BY rating_count DESC
+    LIMIT 1
+""").fetchone()
+print(f"- Utilisateur le plus actif: ID {active_user[0]} ({active_user[1]} évaluations)")
 
 # Fermer la connexion
 conn.close()
-
-pip install fastapi uvicorn duckdb pandas scikit-surprise
