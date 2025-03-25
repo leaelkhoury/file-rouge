@@ -1,84 +1,144 @@
-"""IL FAUT FAIRE JAVA SCRIPT PAS PYTHON """
-
 import streamlit as st
-import requests
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+import requests
+from datetime import datetime
 
-# URL de l'API backend (remplacez par l'URL réelle de votre serveur FastAPI)
-API_URL = "http://backend:8000"
+# Configuration de la page
+st.set_page_config(page_title="Movie Recommendation Dashboard", layout="wide")
 
-# Fonction pour récupérer les recommandations d'un utilisateur
+# URL de l'API backend (à adapter selon votre déploiement)
+API_URL = "http://localhost:8000"
+
+# Fonctions pour récupérer les données depuis l'API
+@st.cache_data
+def get_all_movies():
+    response = requests.get(f"{API_URL}/movies/?limit=10000")
+    return pd.DataFrame(response.json())
+
+@st.cache_data
+def get_ratings():
+    response = requests.get(f"{API_URL}/ratings/")
+    return pd.DataFrame(response.json())
+
+@st.cache_data
 def get_recommendations(user_id):
-    response = requests.post(f"{API_URL}/recommendations/{user_id}")
-    if response.status_code == 200:
-        return response.json()['recommendations']
-    else:
-        st.error("Erreur lors de la récupération des recommandations.")
-        return []
+    response = requests.get(f"{API_URL}/recommend_movies/{user_id}")
+    return response.json()
 
-# Fonction pour afficher la distribution des notes moyennes des films
-def plot_average_ratings_distribution():
-    # Charger les données des films et des notes (ou API)
-    ratings_df = pd.read_csv('ratings.csv')
-    avg_ratings = ratings_df.groupby('movieId')['rating'].mean()
-    
-    # Visualisation
+# Chargement des données
+movies_df = get_all_movies()
+ratings_df = get_ratings()
+
+# Sidebar pour la navigation
+st.sidebar.title("Navigation")
+page = st.sidebar.radio("Choisir une section", 
+                        ["Tableau de bord", "Recommandations", "Exploration des films"])
+
+if page == "Tableau de bord":
+    # Titre principal
+    st.title("Tableau de bord d'analyse des films")
+
+    # 1. Distribution des notes moyennes des films
+    st.header("Distribution des notes moyennes des films")
     fig, ax = plt.subplots()
-    sns.histplot(avg_ratings, bins=30, kde=True, ax=ax)
-    ax.set_title("Distribution des notes moyennes des films")
+    sns.histplot(movies_df['vote_average'], bins=20, kde=True, ax=ax)
     ax.set_xlabel("Note moyenne")
     ax.set_ylabel("Nombre de films")
     st.pyplot(fig)
 
-# Fonction pour afficher l'évolution du nombre de films par année
-def plot_movies_per_year():
-    # Charger les données des films (ou API)
-    movies_df = pd.read_csv('movies.csv')
-    movies_df['year'] = pd.to_datetime(movies_df['release_date'], errors='coerce').dt.year
-    movies_per_year = movies_df.groupby('year').size()
+    # 2. Évolution du nombre de films par année
+    st.header("Évolution du nombre de films par année")
+    movies_df['year'] = pd.to_datetime(movies_df['release_date']).dt.year
+    films_par_an = movies_df.groupby('year').size().reset_index(name='count')
     
-    # Visualisation
     fig, ax = plt.subplots()
-    movies_per_year.plot(kind='bar', ax=ax)
-    ax.set_title("Évolution du nombre de films par année")
+    sns.lineplot(data=films_par_an, x='year', y='count', ax=ax)
     ax.set_xlabel("Année")
     ax.set_ylabel("Nombre de films")
     st.pyplot(fig)
 
-# Fonction pour afficher les recommandations
-def show_recommendations():
-    # Formulaire pour saisir un user_id
-    user_id = st.text_input("Entrez votre user_id pour obtenir des recommandations:")
+    # 3. Top films par note moyenne
+    st.header("Top 10 des films les mieux notés")
+    top_films = movies_df.sort_values('vote_average', ascending=False).head(10)
+    st.dataframe(top_films[['title', 'vote_average', 'genres', 'year']])
+
+    # 4. Statistiques des utilisateurs
+    st.header("Distribution des notes attribuées par les utilisateurs")
+    if not ratings_df.empty:
+        fig, ax = plt.subplots()
+        sns.countplot(data=ratings_df, x='rating', ax=ax)
+        ax.set_xlabel("Note")
+        ax.set_ylabel("Nombre d'évaluations")
+        st.pyplot(fig)
+    else:
+        st.warning("Aucune donnée d'évaluation disponible")
+
+elif page == "Recommandations":
+    st.title(" Système de recommandation de films")
     
-    if user_id:
-        try:
-            user_id = int(user_id)
-            recommendations = get_recommendations(user_id)
-            
-            if recommendations:
-                st.write(f"Films recommandés pour l'utilisateur {user_id}:")
-                for rec in recommendations:
-                    st.write(f"**{rec['title']}** - Note prédite: {rec['rating_predicted']}")
-            else:
-                st.warning("Aucune recommandation disponible.")
-        except ValueError:
-            st.error("Veuillez entrer un identifiant utilisateur valide.")
+    # Formulaire pour saisir l'ID utilisateur
+    user_id = st.number_input("Entrez un ID utilisateur (1-1000)", 
+                             min_value=1, max_value=1000, value=1)
+    
+    if st.button("Obtenir des recommandations"):
+        with st.spinner("Recherche des recommandations..."):
+            try:
+                recommendations = get_recommendations(user_id)
+                
+                st.subheader(f"Recommandations pour l'utilisateur {user_id}")
+                rec_df = pd.DataFrame(recommendations['recommendations'])
+                st.dataframe(rec_df[['title', 'rating_predicted']].sort_values('rating_predicted', ascending=False))
+                
+                # Visualisation des recommandations
+                fig, ax = plt.subplots()
+                sns.barplot(data=rec_df, x='rating_predicted', y='title', ax=ax)
+                ax.set_xlabel("Note prédite")
+                ax.set_ylabel("Film")
+                st.pyplot(fig)
+                
+            except Exception as e:
+                st.error(f"Erreur lors de la récupération des recommandations: {e}")
 
-# Interface principale de l'application
-st.title("Dashboard des Films et Recommandations")
+elif page == "Exploration des films":
+    st.title("Exploration des films")
+    
+    # Filtres
+    col1, col2 = st.columns(2)
+    with col1:
+        selected_genre = st.selectbox("Filtrer par genre", 
+                                     ['Tous'] + sorted(movies_df['genres'].str.split('|').explode().unique()))
+    
+    with col2:
+        selected_year = st.selectbox("Filtrer par année", 
+                                    ['Tous'] + sorted(movies_df['year'].unique(), reverse=True))
+    
+    # Application des filtres
+    filtered_df = movies_df.copy()
+    if selected_genre != 'Tous':
+        filtered_df = filtered_df[filtered_df['genres'].str.contains(selected_genre)]
+    if selected_year != 'Tous':
+        filtered_df = filtered_df[filtered_df['year'] == selected_year]
+    
+    # Affichage des résultats
+    st.subheader(f"Films {selected_genre if selected_genre != 'Tous' else ''} {selected_year if selected_year != 'Tous' else ''}")
+    st.dataframe(filtered_df[['title', 'vote_average', 'genres', 'year']].sort_values('vote_average', ascending=False))
+    
+    # Statistiques par genre
+    if selected_genre == 'Tous':
+        st.header("Répartition des films par genre")
+        genres_count = movies_df['genres'].str.split('|').explode().value_counts()
+        fig, ax = plt.subplots(figsize=(10, 6))
+        genres_count.plot(kind='bar', ax=ax)
+        ax.set_xlabel("Genre")
+        ax.set_ylabel("Nombre de films")
+        st.pyplot(fig)
 
-# Afficher les graphiques d'analyse
-st.header("Analyse des Films")
-plot_average_ratings_distribution()
-plot_movies_per_year()
-
-# Afficher les recommandations
-st.header("Recommandations Personnalisées")
-show_recommendations()
-
-# on peut faire un SORT des recommendations aussi
+# Pied de page
+st.sidebar.markdown("---")
+st.sidebar.markdown("**Système de recommandation de films**")
+st.sidebar.markdown("Utilise l'API FastAPI avec un modèle SVD")
 ___________________________________________________________________________________________________________________________________________________
 
 """
