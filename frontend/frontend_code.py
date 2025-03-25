@@ -11,18 +11,22 @@ st.set_page_config(page_title="Movie Recommendation Dashboard", layout="wide")
 # URL de l'API backend (à adapter selon votre déploiement)
 API_URL = "http://localhost:8000"
 
+
+# Utilise st.cache_data si disponible, sinon st.cache
+cache_decorator = st.cache_data if hasattr(st, 'cache_data') else st.cache
+
 # Fonctions pour récupérer les données depuis l'API
-@st.cache_data
+@cache_decorator
 def get_all_movies():
     response = requests.get(f"{API_URL}/movies/?limit=10000")
     return pd.DataFrame(response.json())
 
-@st.cache_data
+@cache_decorator
 def get_ratings():
     response = requests.get(f"{API_URL}/ratings/")
     return pd.DataFrame(response.json())
 
-@st.cache_data
+@cache_decorator
 def get_recommendations(user_id):
     response = requests.get(f"{API_URL}/recommend_movies/{user_id}")
     return response.json()
@@ -38,7 +42,7 @@ page = st.sidebar.radio("Choisir une section",
 
 if page == "Tableau de bord":
     # Titre principal
-    st.title("Tableau de bord d'analyse des films")
+    st.title("📊 Tableau de bord d'analyse des films")
 
     # 1. Distribution des notes moyennes des films
     st.header("Distribution des notes moyennes des films")
@@ -76,7 +80,7 @@ if page == "Tableau de bord":
         st.warning("Aucune donnée d'évaluation disponible")
 
 elif page == "Recommandations":
-    st.title(" Système de recommandation de films")
+    st.title("🎬 Système de recommandation de films")
     
     # Formulaire pour saisir l'ID utilisateur
     user_id = st.number_input("Entrez un ID utilisateur (1-1000)", 
@@ -102,7 +106,7 @@ elif page == "Recommandations":
                 st.error(f"Erreur lors de la récupération des recommandations: {e}")
 
 elif page == "Exploration des films":
-    st.title("Exploration des films")
+    st.title("🔍 Exploration des films")
     
     # Filtres
     col1, col2 = st.columns(2)
