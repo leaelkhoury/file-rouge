@@ -157,3 +157,31 @@ Docker Compose :
 
 Si vous utilisez Docker Compose, ce fichier orchestrera les services pour votre front-end, back-end, et la base de données DuckDB. Il crée un environnement isolé avec les conteneurs correspondants.
 """
+
+
+"""
+Comment Exécuter le Projet ?
+
+Lancer le backend (FastAPI) :
+bash:
+
+pip install -r requirements.txt    ou bien      pip install streamlit fastapi uvicorn duckdb pandas matplotlib seaborn requests
+uvicorn backend:app --reload
+streamlit run app.py
+
+
+Ouvrir dans le navigateur :
+
+    API : http://localhost:8000/docs
+
+    Dashboard : http://localhost:8501
+
+Exemple de Résultat Attendu
+
+Page "Analytique" : Des graphiques montrant que 60% des films ont une note entre 5 et 7, avec un pic de sorties en 2015.
+
+Page "Recommandations" : Pour l'utilisateur 42, suggestion de Inception (note prédite: 4.8) et The Dark Knight (4.7).
+
+Page "Exploration" : En filtrant par "Action" et "2020", affiche Tenet et Extraction.
+
+""""
