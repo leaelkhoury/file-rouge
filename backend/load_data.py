@@ -1,4 +1,4 @@
-"import requests
+import requests
 import duckdb
 import pandas as pd
 import time
