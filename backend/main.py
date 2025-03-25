@@ -12,104 +12,157 @@ utiliser from api import apiRouter...
 exps:
 @router.post("/recommendations/{user_id}")
 @app.get("/recommendations/{user_id}")
-"""
 
-from fastapi import FastAPI
-from surprise import Dataset, Reader, SVD
-from surprise.model_selection import train_test_split
+tout fonctionne sauf surprise
+"""
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 import duckdb
 import pandas as pd
-from typing import List, Dict
+from surprise import Dataset, Reader, SVD
+from surprise.model_selection import train_test_split
+from typing import List
+from pydantic import BaseModel
 
-# Initialiser l'application FastAPI
 app = FastAPI()
+
+# Configuration CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Modèles Pydantic
+class Movie(BaseModel):
+    id: int
+    title: str
+    genres: str
+    description: str
+    release_date: str
+    vote_average: float
+
+class Recommendation(BaseModel):
+    id: int
+    title: str
+    rating_predicted: float
+
+class RecommendationResponse(BaseModel):
+    user_id: int
+    recommendations: List[Recommendation]
 
 # Connexion à DuckDB
 conn = duckdb.connect('movies.db')
 
-# Charger les films et les évaluations depuis DuckDB
-def load_data():
-    # Charger les évaluations des utilisateurs
-    ratings_df = conn.execute("SELECT * FROM ratings").fetchdf()
-
-    # Charger les films
-    films_df = conn.execute("SELECT id, title FROM films").fetchdf()
+# Chargement des données et entraînement du modèle SVD
+def load_data_and_train_model():
+    # Charger les évaluations
+    ratings_query = "SELECT user_id, movie_id, rating FROM ratings"
+    ratings_df = conn.execute(ratings_query).fetchdf()
     
-    return ratings_df, films_df
-
-# Endpoint pour récupérer les détails d'un film par son id
-@app.get("/movie/{id}")
-async def get_movie_details(id: int):
-    result = conn.execute("SELECT * FROM films WHERE id = ?", (id,)).fetchone()
-    if result:
-        movie_details = {
-            "id": result[0],
-            "title": result[1],
-            "release_date": result[2],
-            "vote_average": result[3],
-            "description": result[4],
-            "genres": result[5],
-            "vote_count": result[6],
-        }
-        return movie_details
-    else:
-        return {"error": "Movie not found"}
-
-# Endpoint pour obtenir des recommandations personnalisées pour un utilisateur
-@app.post("/recommendations/{user_id}")
-async def recommend_movies(user_id: int) -> Dict:
-    # Charger les données de l'utilisateur et des films
-    ratings_df, films_df = load_data()
-    
-    # Utiliser Surprise pour le modèle SVD
+    # Configurer et entraîner le modèle
     reader = Reader(rating_scale=(0.5, 5.0))
     data = Dataset.load_from_df(ratings_df[['user_id', 'movie_id', 'rating']], reader)
-    trainset, testset = train_test_split(data, test_size=0.2)
-
-    # Entraîner le modèle SVD
+    trainset, _ = train_test_split(data, test_size=0.2)
     algo = SVD()
     algo.fit(trainset)
-
-    # Obtenir la liste des films non vus par l'utilisateur
-    seen_movies = ratings_df[ratings_df['user_id'] == user_id]['movie_id'].tolist()
-    unseen_movies = films_df[~films_df['id'].isin(seen_movies)]
     
-    # Faire des prédictions pour les films non vus
+    return algo
+
+# Initialiser le modèle (à faire au démarrage)
+svd_model = load_data_and_train_model()
+
+@app.get("/movies/", response_model=List[Movie])
+def get_all_movies(limit: int = 100):
+    """Récupère la liste des films"""
+    query = f"SELECT id, title, genres, description, release_date, vote_average FROM films LIMIT {limit}"
+    movies = conn.execute(query).fetchall()
+    return [{
+        "id": m[0],
+        "title": m[1],
+        "genres": m[2],
+        "description": m[3],
+        "release_date": m[4],
+        "vote_average": m[5]
+    } for m in movies]
+
+@app.get("/movies/{movie_id}", response_model=Movie)
+def get_movie(movie_id: int):
+    """Récupère les détails d'un film spécifique"""
+    query = "SELECT id, title, genres, description, release_date, vote_average FROM films WHERE id = ?"
+    movie = conn.execute(query, [movie_id]).fetchone()
+    
+    if not movie:
+        raise HTTPException(status_code=404, detail="Film non trouvé")
+    
+    return {
+        "id": movie[0],
+        "title": movie[1],
+        "genres": movie[2],
+        "description": movie[3],
+        "release_date": movie[4],
+        "vote_average": movie[5]
+    }
+
+@app.get("/recommend_movies/{user_id}", response_model=RecommendationResponse)
+def recommend_movies(user_id: int, limit: int = 10):
+    """Génère des recommandations personnalisées pour un utilisateur"""
+    # 1. Récupérer les films déjà notés par l'utilisateur
+    rated_query = "SELECT movie_id FROM ratings WHERE user_id = ?"
+    rated_movies = conn.execute(rated_query, [user_id]).fetchall()
+    rated_movie_ids = [m[0] for m in rated_movies]
+    
+    # 2. Récupérer tous les films non notés par l'utilisateur
+    if rated_movie_ids:
+        movies_query = f"""
+            SELECT id, title FROM films 
+            WHERE id NOT IN ({','.join(map(str, rated_movie_ids))})
+        """
+    else:
+        movies_query = "SELECT id, title FROM films"
+    
+    all_movies = conn.execute(movies_query).fetchall()
+    
+    # 3. Faire des prédictions pour chaque film non noté
     recommendations = []
-    for movie_id in unseen_movies['id']:
-        pred = algo.predict(user_id, movie_id)
+    for movie_id, title in all_movies:
+        pred = svd_model.predict(uid=user_id, iid=movie_id)
         recommendations.append({
             "id": movie_id,
-            "title": unseen_movies[unseen_movies['id'] == movie_id]['title'].values[0],
-            "rating_predicted": pred.est,
+            "title": title,
+            "rating_predicted": round(pred.est, 1)
         })
     
-    # Trier les recommandations par note prédite
-    recommendations = sorted(recommendations, key=lambda x: x['rating_predicted'], reverse=True)
+    # 4. Trier par note prédite et retourner les meilleurs
+    recommendations.sort(key=lambda x: x["rating_predicted"], reverse=True)
+    top_recommendations = recommendations[:limit]
     
-    # Limiter à 10 recommandations
-    recommendations = recommendations[:10]
-    
-    return {"user_id": user_id, "recommendations": recommendations}
-
-# Endpoint pour récupérer des statistiques sur les films
-@app.get("/statistics/{gender}/{year}")
-async def get_statistics(gender: str, year: int) -> Dict:
-    # Récupérer les films filtrés par genre et année
-    query = f"SELECT * FROM films WHERE genres LIKE '%{gender}%' AND strftime('%Y', release_date) = '{year}'"
-    result = conn.execute(query).fetchdf()
-
-    # Calculer les 10 films les mieux notés
-    top_rated_movies = result.sort_values(by='vote_average', ascending=False).head(10)
-
-    statistics = {
-        "top_rated_movies": top_rated_movies[['title', 'vote_average']].to_dict(orient='records'),
+    return {
+        "user_id": user_id,
+        "recommendations": top_recommendations
     }
-    
-    return statistics
 
-# Lancer l'application avec uvicorn (si vous n'êtes pas dans un Dockerfile)
-# uvicorn main:app --reload
+@app.get("/statistics/{genre}/{year}", response_model=List[Movie])
+def get_statistics(genre: str, year: str, limit: int = 10):
+    """Récupère les films d'un genre et d'une année spécifique"""
+    query = f"""
+        SELECT id, title, genres, description, release_date, vote_average 
+        FROM films 
+        WHERE genres LIKE '%{genre}%' AND strftime('%Y', release_date) = '{year}'
+        ORDER BY vote_average DESC
+        LIMIT {limit}
+    """
+    movies = conn.execute(query).fetchall()
+    
+    return [{
+        "id": m[0],
+        "title": m[1],
+        "genres": m[2],
+        "description": m[3],
+        "release_date": m[4],
+        "vote_average": m[5]
+    } for m in movies]
 
 
 _____________________________________________________________________________________________________________________________________________________________
