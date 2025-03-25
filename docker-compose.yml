@@ -2,24 +2,28 @@ version: '3.8'
 
 services:
   backend:
-    build:
-      context: ./backend
+    build: ./backend
     ports:
       - "8000:8000"
+    environment:
+      - DB_PATH=/data/movies.db
+    volumes:
+      - ./data:/data
     networks:
       - flix_network
-    depends_on:
-      - database
+    restart: unless-stopped
 
   frontend:
-    build:
-      context: ./frontend
+    build: ./frontend
     ports:
       - "8501:8501"
-    networks:
-      - flix_network
+    environment:
+      - API_URL=http://backend:8000
     depends_on:
       - backend
+    networks:
+      - flix_network
+    restart: unless-stopped
 
   database:
     image: duckdb/duckdb:latest
@@ -27,9 +31,11 @@ services:
       - ./data:/data
     networks:
       - flix_network
-    environment:
-      - DUCKDB_DB=/data/movies.db
+    restart: unless-stopped
 
 networks:
   flix_network:
     driver: bridge
+
+volumes:
+  data:
