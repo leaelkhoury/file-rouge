@@ -42,7 +42,7 @@ page = st.sidebar.radio("Choisir une section",
 
 if page == "Tableau de bord":
     # Titre principal
-    st.title("📊 Tableau de bord d'analyse des films")
+    st.title("Tableau de bord d'analyse des films")
 
     # 1. Distribution des notes moyennes des films
     st.header("Distribution des notes moyennes des films")
@@ -80,7 +80,7 @@ if page == "Tableau de bord":
         st.warning("Aucune donnée d'évaluation disponible")
 
 elif page == "Recommandations":
-    st.title("🎬 Système de recommandation de films")
+    st.title("Système de recommandation de films")
     
     # Formulaire pour saisir l'ID utilisateur
     user_id = st.number_input("Entrez un ID utilisateur (1-1000)", 
@@ -106,7 +106,7 @@ elif page == "Recommandations":
                 st.error(f"Erreur lors de la récupération des recommandations: {e}")
 
 elif page == "Exploration des films":
-    st.title("🔍 Exploration des films")
+    st.title("Exploration des films")
     
     # Filtres
     col1, col2 = st.columns(2)
@@ -149,32 +149,24 @@ ________________________________________________________________________________
 Explication du Code :
 Streamlit (app.py) :
 
-Visualisation des données : Vous utilisez seaborn et matplotlib pour afficher des graphiques sur la distribution des notes moyennes des films et l'évolution du nombre de films par année.
-Recommandations personnalisées : Vous utilisez une interface Streamlit qui permet à l'utilisateur de saisir un user_id et affiche les films recommandés par l'API du back-end.
-Dockerfile :
-
-Ce fichier définit un conteneur Docker pour exécuter l'application Streamlit sur le port 8501.
-requirements.txt :
-
-Liste les bibliothèques nécessaires pour l'exécution de votre application Streamlit et pour la manipulation de données (pandas, matplotlib, seaborn, etc.).
-Docker Compose :
-
-Si vous utilisez Docker Compose, ce fichier orchestrera les services pour votre front-end, back-end, et la base de données DuckDB. Il crée un environnement isolé avec les conteneurs correspondants.
+Visualisation des données : on a utilisé seaborn et matplotlib pour afficher des graphiques sur la distribution des notes moyennes des films et l'évolution du nombre de films par année.
+Recommandations personnalisées : on a utilisé une interface Streamlit qui permet à l'utilisateur de saisir un user_id et affiche les films recommandés par l'API du back-end.
+Dockerfile définit un conteneur Docker pour exécuter l'application Streamlit sur le port 8501.
+requirements.txt liste les bibliothèques nécessaires pour l'exécution de votre application Streamlit et pour la manipulation de données (pandas, matplotlib, seaborn, etc.).
+Docker Compose orchestrera les services pour votre front-end, back-end, et la base de données DuckDB. Il crée un environnement isolé avec les conteneurs correspondants.
 """
 
 
 """
-Comment Exécuter le Projet ?
+on a lancer le backend (FastAPI) :
 
-Lancer le backend (FastAPI) :
 bash:
-
 pip install -r requirements.txt    ou bien      pip install streamlit fastapi uvicorn duckdb pandas matplotlib seaborn requests
 uvicorn backend:app --reload
 streamlit run app.py
 
 
-Ouvrir dans le navigateur :
+dans le navigateur :
 
     API : http://localhost:8000/docs
 
