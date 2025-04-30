@@ -164,4 +164,43 @@ GET /movie/{id} : Ce point de terminaison prend un id de film et retourne ses d�
 POST /recommendations/{user_id} : Ce point de terminaison prend un user_id, génère des recommandations personnalisées en utilisant le modèle SVD et retourne les 10 films les mieux notés que l'utilisateur pourrait aimer. Le modèle SVD est formé sur les évaluations des utilisateurs et utilise les films non vus par l'utilisateur pour générer des prédictions.
 
 GET /statistics/{gender}/{year} : Ce point de terminaison permet de récupérer des statistiques sur les films d'un genre spécifique et d'une année spécifique. Il retourne les 10 films les mieux notés pour ce genre et cette année.
+
+Conclusion: on a une API FastAPI qui offre :
+La récupération des détails d'un film spécifique.
+Des recommandations personnalisées basées sur un modèle SVD de filtrage collaboratif.
+Des statistiques sur les films, comme le top 10 des films les mieux notés d'un genre et d'une année donnés.
+
+
+Pour exécuter l'application avec Docker :
+
+1.Construire l'image Docker :
+bash:
+
+Copy
+Edit
+docker build -t backend .
+
+2.Lancer le conteneur :
+
+Copy
+Edit
+docker run -p 8000:8000 backend
+
+3. Test de l'API
+a. Obtenir les détails d'un film :
+bash
+Copy
+Edit
+curl http://localhost:8000/movie/299536
+
+b. Obtenir des recommandations pour un utilisateur :
+bash
+Copy
+Edit
+curl -X 'POST' \
+  'http://localhost:8000/recommendations/1' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  }'
+
 """
