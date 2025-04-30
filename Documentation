@@ -1,1 +1,241 @@
+import requests
 
+# ma clé API TMDB
+API_KEY = "f388326c5cac9ad23fde27ca61ce2a3c"
+BASE_URL = "https://api.themoviedb.org/3"
+
+# Fonction pour récupérer les films populaires
+def get_popular_movies():
+    url = f"{BASE_URL}/movie/popular?api_key={API_KEY}"
+    response = requests.get(url)
+    if response.status_code == 200:
+        return response.json()  # Retourne les films populaires en format JSON
+    else:
+        print(f"Erreur: {response.status_code}")
+        return None
+
+# Appel de la fonction et affichage des résultats
+popular_movies = get_popular_movies()
+if popular_movies:
+    for movie in popular_movies['results'][:5]:  # Afficher les 5 premiers films populaires
+        print(f"Title: {movie['title']}, Release Date: {movie['release_date']}")
+
+# pip install duckdb
+
+import duckdb
+import requests
+import pandas as pd
+
+# Connexion à DuckDB (création d'un fichier si inexistant)
+conn = duckdb.connect('movies.db')
+
+# Créer une table films si elle n'existe pas déjà
+conn.execute(''' 
+    CREATE TABLE IF NOT EXISTS films ( 
+        id INTEGER PRIMARY KEY, 
+        title TEXT, 
+        release_date TEXT, 
+        vote_average REAL, 
+        description TEXT, 
+        genres TEXT, 
+        vote_count INTEGER
+    ); 
+''')
+
+# Créer une table ratings si elle n'existe pas déjà
+conn.execute(''' 
+    CREATE TABLE IF NOT EXISTS ratings ( 
+        user_id INTEGER, 
+        movie_id INTEGER, 
+        rating REAL, 
+        timestamp INTEGER 
+    ); 
+''')
+
+# Remplacer par ta clé API TMDB
+API_KEY = "f388326c5cac9ad23fde27ca61ce2a3c"
+BASE_URL = "https://api.themoviedb.org/3"
+
+# Fonction pour récupérer les films populaires
+def get_popular_movies():
+    url = f"{BASE_URL}/movie/popular?api_key={API_KEY}"
+    response = requests.get(url)
+    if response.status_code == 200:
+        return response.json()['results']  # Retourne les films populaires en format JSON
+    else:
+        print(f"Erreur: {response.status_code}")
+        return []
+
+# Insérer les films récupérés dans la base de données
+def insert_movies_to_db(movies):
+    # Connexion à la base de données
+    conn = duckdb.connect('movies.db')
+    
+    for movie in movies:
+        # Vérifier si le film existe déjà dans la base de données
+        movie_id = movie['id']
+        result = conn.execute("SELECT COUNT(*) FROM films WHERE id = ?", (movie_id,)).fetchone()
+        
+        if result[0] == 0:  # Si le film n'existe pas, l'insérer
+            # Gérer le cas où la clé 'genres' ou d'autres clés peuvent être manquantes
+            genres = ', '.join([genre['name'] for genre in movie.get('genres', [])]) if 'genres' in movie else ''
+            description = movie.get('overview', '')
+            release_date = movie.get('release_date', '')
+            vote_average = movie.get('vote_average', 0)
+            vote_count = movie.get('vote_count', 0)
+
+            conn.execute(''' 
+                INSERT INTO films (id, title, genres, description, release_date, vote_average, vote_count) 
+                VALUES (?, ?, ?, ?, ?, ?, ?) 
+            ''', (movie['id'], movie['title'], genres, description, release_date, vote_average, vote_count))
+        else:
+            print(f"Le film avec l'id {movie_id} existe déjà dans la base.")
+
+# Récupérer les films populaires et les insérer dans la base de données
+movies = get_popular_movies()
+insert_movies_to_db(movies)
+
+# Charger les évaluations des utilisateurs depuis le fichier CSV "ratings.csv"
+ratings_df = pd.read_csv('ratings.csv')
+
+# Insérer les évaluations dans la base de données
+def insert_ratings_to_db():
+    for _, row in ratings_df.iterrows():
+        conn.execute('''
+            INSERT INTO ratings (user_id, movie_id, rating, timestamp)
+            VALUES (?, ?, ?, ?)
+        ''', (row['userId'], row['movieId'], row['rating'], row['timestamp']))
+
+insert_ratings_to_db()
+
+# Vérifier l'insertion
+result = conn.execute('SELECT * FROM films LIMIT 5').fetchall()
+print("Films insérés:", result)
+
+ratings_result = conn.execute('SELECT * FROM ratings LIMIT 5').fetchall()
+print("Évaluations insérées:", ratings_result)
+
+# Exporter la base de données sous forme de fichier SQL
+conn.execute("EXPORT DATABASE 'movies.db' TO 'movies_backup.sql';")
+
+# Fermer la connexion
+conn.close()
+
+import duckdb
+import pandas as pd
+from fastapi import FastAPI
+from typing import List
+from pydantic import BaseModel
+from surprise import SVD, Reader, Dataset
+from surprise.model_selection import train_test_split
+from surprise import accuracy
+
+app = FastAPI()
+
+# Connexion à DuckDB
+conn = duckdb.connect('movies.db')
+
+# Modèle pour la réponse de film
+class Movie(BaseModel):
+    id: int
+    title: str
+    genres: str
+    description: str
+    release_date: str
+    vote_average: float
+    vote_count: int
+
+# Modèle pour la recommandation
+class RecommendationsResponse(BaseModel):
+    user_id: int
+    recommended_movies: List[Movie]
+    rating_predicted: float
+
+# Récupérer les détails d'un film
+@app.get("/movie/{movie_id}", response_model=Movie)
+def get_movie_details(movie_id: int):
+    result = conn.execute("SELECT * FROM films WHERE id = ?", (movie_id,)).fetchone()
+    if result:
+        movie = Movie(
+            id=result[0],
+            title=result[1],
+            genres=result[5],
+            description=result[4],
+            release_date=result[2],
+            vote_average=result[3],
+            vote_count=result[6]
+        )
+        return movie
+    else:
+        return {"error": "Film not found"}
+
+# Recommandations par filtrage collaboratif
+@app.post("/recommendations/{user_id}", response_model=RecommendationsResponse)
+def get_recommendations(user_id: int):
+    # Charger les données de ratings depuis DuckDB
+    ratings_df = pd.read_sql("SELECT * FROM ratings", conn)
+
+    # Créer un ensemble de données pour le modèle de filtrage collaboratif
+    reader = Reader(rating_scale=(0, 5))
+    data = Dataset.load_from_df(ratings_df[['user_id', 'movie_id', 'rating']], reader)
+    trainset, testset = train_test_split(data, test_size=0.2)
+
+    # Entraînement du modèle
+    model = SVD()
+    model.fit(trainset)
+
+    # Prédire les notes pour l'utilisateur
+    movie_ids = ratings_df['movie_id'].unique()
+    predictions = []
+    for movie_id in movie_ids:
+        prediction = model.predict(user_id, movie_id)
+        predictions.append((movie_id, prediction.est))
+
+    # Trier par prédiction de la note
+    predictions.sort(key=lambda x: x[1], reverse=True)
+
+    # Récupérer les meilleurs films recommandés
+    recommended_movies = []
+    for movie_id, rating_predicted in predictions[:10]:  # Top 10 films recommandés
+        result = conn.execute("SELECT * FROM films WHERE id = ?", (movie_id,)).fetchone()
+        if result:
+            movie = Movie(
+                id=result[0],
+                title=result[1],
+                genres=result[5],
+                description=result[4],
+                release_date=result[2],
+                vote_average=result[3],
+                vote_count=result[6]
+            )
+            recommended_movies.append(movie)
+
+    return RecommendationsResponse(
+        user_id=user_id,
+        recommended_movies=recommended_movies,
+        rating_predicted=rating_predicted
+    )
+
+# Statistiques des films par genre et année
+@app.get("/statistics/{genre}/{year}")
+def get_statistics(genre: str, year: int):
+    # Sélectionner les films filtrés par genre et année
+    result = conn.execute('''
+        SELECT title, vote_average, genres, release_date 
+        FROM films
+        WHERE genres LIKE ? AND release_date LIKE ?
+        ORDER BY vote_average DESC
+        LIMIT 10
+    ''', ('%' + genre + '%', str(year) + '%')).fetchall()
+
+    # Retourner les films trouvés
+    top_movies = [
+        {"title": row[0], "vote_average": row[1], "genres": row[2], "release_date": row[3]}
+        for row in result
+    ]
+    
+    return {"top_movies": top_movies}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
