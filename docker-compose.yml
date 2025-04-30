@@ -39,3 +39,26 @@ networks:
 
 volumes:
   data:
+
+
+
+
+"""" NOS COMMENTAIRES:
+Docker Compose orchestrera les services pour votre front-end, back-end, et la base de données DuckDB. 
+Il crée un environnement isolé avec les conteneurs correspondants.
+
+Exécution du projet:
+Dans le répertoire contenant le fichier docker-compose.yml, on a exécuté les commandes suivantes pour construire et démarrer les services :
+
+bash
+Copy
+Edit
+docker-compose up --build
+
+Pour accéder à l'Application :
+Front-End (Streamlit) sera disponible à http://localhost:8501.
+L'API Backend (FastAPI) sera disponible à http://localhost:8000.
+
+On pourra voir les graphiques d'analyse et utiliser le formulaire pour entrer un user_id et obtenir les recommandations de films.
+Cela couvre l'ensemble de la partie front-end et son interaction avec le back-end via l'API REST.
+""""
