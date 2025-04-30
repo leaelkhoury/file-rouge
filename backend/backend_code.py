@@ -1,19 +1,9 @@
-""" from pydantic import BaseModel: typing (typer les requetes ) 
-import joblib
-
-class CLASS1(BaseModel):
-message: str/int/float (c'est un exple)
-
-et on peut avoir:
-class  CLASS2(BaseModel):
-rec= List(CLASS1)
-
-utiliser from api import apiRouter...
-exps:
+""" 
+on pouvait utiliser from api import apiRouter comme on a vu en classe: 
 @router.post("/recommendations/{user_id}")
 @app.get("/recommendations/{user_id}")
 
-tout fonctionne sauf surprise
+mais on a choisi de faire autrement:
 """
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
