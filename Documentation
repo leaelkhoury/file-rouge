@@ -1,8 +1,9 @@
-import requests
+"""
+dans ce fichier vous trouverez les étapes détaillées et expliquées, et dans chaque fichier de ce projet (frontend, backend,...) vous trouverez
+une petite documentation de la pqrtie qu'on fait, en bas ou en haut en commentaire.
+"""
 
-# ma clé API TMDB
-API_KEY = "f388326c5cac9ad23fde27ca61ce2a3c"
-BASE_URL = "https://api.themoviedb.org/3"
+import requests
 
 # Fonction pour récupérer les films populaires
 def get_popular_movies():
@@ -42,7 +43,7 @@ conn.execute('''
     ); 
 ''')
 
-# Créer une table ratings si elle n'existe pas déjà
+# Créer une table ratings car elle n'existe pas déjà
 conn.execute(''' 
     CREATE TABLE IF NOT EXISTS ratings ( 
         user_id INTEGER, 
@@ -52,7 +53,7 @@ conn.execute('''
     ); 
 ''')
 
-# Remplacer par ta clé API TMDB
+# ma clé API TMDB
 API_KEY = "f388326c5cac9ad23fde27ca61ce2a3c"
 BASE_URL = "https://api.themoviedb.org/3"
 
@@ -121,6 +122,8 @@ conn.execute("EXPORT DATABASE 'movies.db' TO 'movies_backup.sql';")
 # Fermer la connexion
 conn.close()
 
+
+
 import duckdb
 import pandas as pd
 from fastapi import FastAPI
@@ -135,7 +138,7 @@ app = FastAPI()
 # Connexion à DuckDB
 conn = duckdb.connect('movies.db')
 
-# Modèle pour la réponse de film
+# Modèle pour la réponse de film , on a utilisé BaseModel comme proposé en classe 
 class Movie(BaseModel):
     id: int
     title: str
