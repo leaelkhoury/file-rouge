@@ -153,7 +153,7 @@ Visualisation des données : on a utilisé seaborn et matplotlib pour afficher d
 Recommandations personnalisées : on a utilisé une interface Streamlit qui permet à l'utilisateur de saisir un user_id et affiche les films recommandés par l'API du back-end.
 Dockerfile définit un conteneur Docker pour exécuter l'application Streamlit sur le port 8501.
 requirements.txt liste les bibliothèques nécessaires pour l'exécution de votre application Streamlit et pour la manipulation de données (pandas, matplotlib, seaborn, etc.).
-Docker Compose orchestrera les services pour votre front-end, back-end, et la base de données DuckDB. Il crée un environnement isolé avec les conteneurs correspondants.
+
 """
 
 
@@ -168,9 +168,10 @@ streamlit run app.py
 
 dans le navigateur :
 
-    API : http://localhost:8000/docs
+    L'API Backend (FastAPI) : http://localhost:8000/docs
 
-    Dashboard : http://localhost:8501
+   Front-End (Streamlit) : http://localhost:8501
+    
 
 Exemple de Résultat Attendu
 
